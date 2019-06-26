@@ -1,34 +1,34 @@
 pragma solidity ^0.4.22;
 
 contract SimpleAuction {
-    // Parameters of the auction. Times are either
-    // absolute unix timestamps (seconds since 1970-01-01)
-    // or time periods in seconds.
+    // Параметры аукциона. Времена либо
+     // абсолютные метки времени Unix (секунды с 1970-01-01)
+     // либо периоды времени в секундах.
     address public beneficiary;
     uint public auctionEnd;
 
-    // Current state of the auction.
+    // Текущее состояние аукциона.
     address public highestBidder;
     uint public highestBid;
 
-    // Allowed withdrawals of previous bids
+    // Разрешено снятие предыдущих заявок
     mapping(address => uint) pendingReturns;
 
-    // Set to true at the end, disallows any change
+    // В конце устанавливается значение true, запрещает любые изменения
     bool ended;
 
-    // Events that will be fired on changes.
+    // События, которые будут срабатывать при изменениях
     event HighestBidIncreased(address bidder, uint amount);
     event AuctionEnded(address winner, uint amount);
 
-    // The following is a so-called natspec comment,
-    // recognizable by the three slashes.
-    // It will be shown when the user is asked to
-    // confirm a transaction.
+    // Ниже приведен так называемый комментарий natspec,
+     // узнаваем по трем слэшам.
+     // Будет показан, когда пользователя попросят
+     // подтвердить транзакцию
 
-    /// Create a simple auction with `_biddingTime`
-    /// seconds bidding time on behalf of the
-    /// beneficiary address `_beneficiary`.
+    /// Создайте простой аукцион с `_biddingTime`
+     /// секунд времени торгов от имени
+     /// адреса получателя `_beneficiary`.
     constructor(
         uint _biddingTime,
         address _beneficiary
@@ -37,37 +37,36 @@ contract SimpleAuction {
         auctionEnd = now + _biddingTime;
     }
 
-    /// Bid on the auction with the value sent
-    /// together with this transaction.
-    /// The value will only be refunded if the
-    /// auction is not won.
+    /// Ставка на аукцион вместе с количеством поставленного эфира
+     /// Значение будет возвращено только если
+     /// аукцион не выигран
     function bid() public payable {
-        // No arguments are necessary, all
-        // information is already part of
-        // the transaction. The keyword payable
-        // is required for the function to
-        // be able to receive Ether.
+        // Никаких аргументов не нужно, все
+         // информация уже является частью
+         // транзакции. Ключевое слово "payable"
+         // требуется для того, чтобы функция
+         // была в состоянии получать эфир
 
-        // Revert the call if the bidding
-        // period is over.
+        // Отменить вызов функции, если
+         // период  торгов окончен.
         require(
             now <= auctionEnd,
             "Auction already ended."
         );
 
-        // If the bid is not higher, send the
-        // money back.
+        // Если ставка не выше максимальной, отправить
+         // деньги назад.
         require(
             msg.value > highestBid,
             "There already is a higher bid."
         );
 
         if (highestBid != 0) {
-            // Sending back the money by simply using
-            // highestBidder.send(highestBid) is a security risk
-            // because it could execute an untrusted contract.
-            // It is always safer to let the recipients
-            // withdraw their money themselves.
+            // Отослать деньги обратно, просто используя
+             // highestBidder.send(highestBid) - угроза безопасности,
+             // потому что он может выполнить небезопасный контракт.
+             // Всегда безопаснее позволить получателям
+             // забирать свои деньги самим.
             pendingReturns[highestBidder] += highestBid;
         }
         highestBidder = msg.sender;
@@ -75,17 +74,15 @@ contract SimpleAuction {
         emit HighestBidIncreased(msg.sender, msg.value);
     }
 
-    /// Withdraw a bid that was overbid.
+    /// Возвращаем ставку, если она была перебита
     function withdraw() public returns (bool) {
         uint amount = pendingReturns[msg.sender];
         if (amount > 0) {
-            // It is important to set this to zero because the recipient
-            // can call this function again as part of the receiving call
-            // before `send` returns.
+            // Важно присвоить этому ноль, потому что получатель
+             // может еще раз вызвать эту функцию, что не будет являться корректным
             pendingReturns[msg.sender] = 0;
 
             if (!msg.sender.send(amount)) {
-                // No need to call throw here, just reset the amount owing
                 pendingReturns[msg.sender] = amount;
                 return false;
             }
@@ -93,31 +90,25 @@ contract SimpleAuction {
         return true;
     }
 
-    /// End the auction and send the highest bid
-    /// to the beneficiary.
+    /// Завершаем аукцион и отправляем самую высокую ставку
+     /// бенефициару
     function auctionEnd() public {
-        // It is a good guideline to structure functions that interact
-        // with other contracts (i.e. they call functions or send Ether)
-        // into three phases:
-        // 1. checking conditions
-        // 2. performing actions (potentially changing conditions)
-        // 3. interacting with other contracts
-        // If these phases are mixed up, the other contract could call
-        // back into the current contract and modify the state or cause
-        // effects (ether payout) to be performed multiple times.
-        // If functions called internally include interaction with external
-        // contracts, they also have to be considered interaction with
-        // external contracts.
+        // Хорошим тоном является структурировать функции, которые взаимодействуют
+         // с другими контрактами (то есть они вызывают функции или отправляют эфир)
+         // в три блока:
+         // 1. проверка условий
+         // 2. выполнение действий (потенциально меняющих условия)
+         // 3. взаимодействие с другими контрактами
 
-        // 1. Conditions
+        // 1. Условия
         require(now >= auctionEnd, "Auction not yet ended.");
         require(!ended, "auctionEnd has already been called.");
 
-        // 2. Effects
+        // 2. Действия
         ended = true;
         emit AuctionEnded(highestBidder, highestBid);
 
-        // 3. Interaction
+        // 3. Взаимодействие
         beneficiary.transfer(highestBid);
     }
 }
